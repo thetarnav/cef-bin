@@ -1,0 +1,8 @@
+# dependencies (bun install)
+node_modules/
+
+# CEF binaries (downloaded by scripts/download-cef.ts)
+cef/
+
+# Distribution packages
+dist/

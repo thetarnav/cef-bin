@@ -1,0 +1,15 @@
+{
+    "name": "cef-bin",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "typecheck": "tsc --noEmit",
+        "latest": "./run.ts latest",
+        "download": "./run.ts download",
+        "workflow": "./run.ts"
+    },
+    "devDependencies": {
+        "typescript": "^5",
+        "@types/bun": "latest"
+    }
+}
