@@ -217,12 +217,25 @@ async function build_cef(args: Download_Args, log_prefix: string): Promise<strin
 	console.log(`[${log_prefix}] Channel: ${channel}`)
 	console.log(`[${log_prefix}] Version: ${full_version}`)
 
-	let wrapper_path: string
-	if (args.platform.startsWith("windows")) {
-		wrapper_path = path.join(build_dir, "libcef_dll_wrapper", "Release", "libcef_dll_wrapper.lib")
-	} else {
-		wrapper_path = path.join(build_dir, "libcef_dll_wrapper", "libcef_dll_wrapper.a")
-	}
+    let wrapper_lib: string
+    let wrapper_path: string
+    switch (args.platform) {
+    case "linux64":
+    case "linuxarm64":
+        wrapper_lib = "libcef_dll_wrapper.a"
+        wrapper_path = path.join(build_dir, "libcef_dll_wrapper", wrapper_lib)
+        break
+    case "macosx64":
+    case "macosarm64":
+        wrapper_lib = "libcef_dll_wrapper.a"
+        wrapper_path = path.join(build_dir, "libcef_dll_wrapper", "Release", wrapper_lib)
+        break
+    case "windows64":
+    case "windowsarm64":
+        wrapper_lib = "libcef_dll_wrapper.lib"
+        wrapper_path = path.join(build_dir, "libcef_dll_wrapper", "Release", wrapper_lib)
+        break
+    }
 
 	let version_file = path.join(output_dir, ".version")
 	let existing_version = fs.existsSync(version_file) ? fs.readFileSync(version_file, "utf-8") : null
@@ -304,9 +317,8 @@ async function build_cef(args: Download_Args, log_prefix: string): Promise<strin
 		let pkg_dir = path.join(DIST_DIR, dist_name, "package")
 		fs.mkdirSync(pkg_dir, {recursive: true})
 
-		let ext = args.platform.startsWith("windows") ? ".lib" : ".a"
 		if (!fs.existsSync(wrapper_path)) throw new Error(`Wrapper not found: ${wrapper_path}`)
-		fs.cpSync(wrapper_path, path.join(pkg_dir, `libcef_dll_wrapper${ext}`))
+		fs.cpSync(wrapper_path, path.join(pkg_dir, wrapper_lib))
 		fs.cpSync(path.join(output_dir, "include"), path.join(pkg_dir, "include"), {recursive: true})
 
 		if (!args.platform.startsWith("macos")) {
