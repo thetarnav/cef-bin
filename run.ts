@@ -126,6 +126,7 @@ function parse_version(version: string): {cef: string; chromium: string} | null 
 interface Global_Args {
 	platform: string
 	beta:     boolean
+	force:    boolean
 }
 
 function parse_global_args(args: string[]): Global_Args {
@@ -135,11 +136,13 @@ function parse_global_args(args: string[]): Global_Args {
 		options: {
 			"platform": {type: "string",  short: "p"},
 			"beta":     {type: "boolean", default: false},
+			"force":    {type: "boolean", short: "f"},
 		},
 	})
 	return {
 		platform: typeof values.platform === "string" ? values.platform : current_platform(),
 		beta: Boolean(values.beta),
+		force: Boolean(values.force),
 	}
 }
 
@@ -336,6 +339,27 @@ async function cmd_download(cmd_args: string[]): Promise<void> {
 	await build_cef(args, "download")
 }
 
+async function cmd_check(cmd_args: string[]): Promise<void> {
+	let args = parse_global_args(cmd_args)
+	let build_info = await get_latest_version(args)
+	if (!build_info) {
+		console.error("No build found")
+		process.exit(1)
+	}
+
+	let last_version = read_last_version()
+	let should_continue = args.force || last_version !== build_info.version
+
+	console.log(`VERSION=${build_info.version}`)
+	console.log(`LAST_VERSION=${last_version ?? ""}`)
+	console.log(`SHOULD_CONTINUE=${should_continue}`)
+
+	if (!should_continue) {
+		console.log("Version unchanged, skipping")
+		process.exit(0)
+	}
+}
+
 async function cmd_workflow(cmd_args: string[]): Promise<void> {
 	let args = parse_download_args(cmd_args)
 	let args_with_version: Download_Args
@@ -376,6 +400,7 @@ function print_usage(): void {
 	console.log(``)
 	console.log(`Commands:`)
 	console.log(`  latest    Show the latest CEF version`)
+	console.log(`  check     Check if version changed (for CI)`)
 	console.log(`  download  Download, build, and package CEF`)
 	console.log(`  workflow  Like download, but tracks version in .last_version`)
 	console.log(``)
@@ -403,6 +428,7 @@ async function main(): Promise<void> {
 
 	switch (cmd) {
 	case "latest":   return cmd_latest(args)
+	case "check":    return cmd_check(args)
 	case "download": return cmd_download(args)
 	case "workflow": return cmd_workflow(args)
 	default:

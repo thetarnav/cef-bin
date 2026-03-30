@@ -52,6 +52,7 @@ It documents practical conventions observed in the codebase.
 ## Quick Pre-Handoff Checklist
 
 - `bun run latest` works
+- `bun run check` works (for CI)
 - `bun run download --platform=linux64` works
 - `bun run workflow --platform=linux64` works
 - no accidental dependency additions

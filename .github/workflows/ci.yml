@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.VERSION }}
+      should-continue: ${{ steps.check.outputs.SHOULD_CONTINUE }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - id: check
+        run: bun run run.ts check
+
+  build:
+    needs: check-version
+    if: needs.check-version.outputs.should-continue == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      x86_64: ${{ matrix.os == 'ubuntu-latest' && 'linux64' || matrix.os == 'macos-latest' && 'macosx64' || 'windows64' }}
+      arm64: ${{ matrix.os == 'ubuntu-latest' && 'linuxarm64' || matrix.os == 'macos-latest' && 'macosarm64' || 'windowsarm64' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Build x86_64
+        run: bun run run.ts download -p ${{ env.x86_64 }} -v ${{ needs.check-version.outputs.version }}
+
+      - name: Build arm64
+        run: bun run run.ts download -p ${{ env.arm64 }} -v ${{ needs.check-version.outputs.version }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cef-${{ matrix.os }}
+          path: dist/
+
+  release:
+    needs: [check-version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Update version file
+        run: echo "${{ needs.check-version.outputs.version }}" > .last_version
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.check-version.outputs.version }}
+          name: CEF ${{ needs.check-version.outputs.version }}
+          draft: false
+          prerelease: false
+          files: artifacts/*.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Commit version update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .last_version
+          git diff --cached --quiet || git commit -m "chore: update .last_version to ${{ needs.check-version.outputs.version }}"
+          git push
