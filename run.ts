@@ -88,26 +88,20 @@ function write_last_version(version: string): void {
 	fs.writeFileSync(VERSION_FILE, version)
 }
 
-function platform_to_cef(platform: string): string {
-	if (PLATFORMS.includes(platform as Platform)) {
-		return platform
-	}
-	throw new Error(`Unknown platform: ${platform}`)
+function is_platform(platform: string | Platform): platform is Platform {
+	return PLATFORMS.includes(platform as Platform)
 }
 
-function to_platform(os: string, arch: string): string {
-	let os_name: string
+function to_platform(os: string, arch: string): Platform {
 	switch (os) {
-	case "linux":  os_name = "linux"  ;break
-	case "darwin": os_name = "macos"  ;break
-	case "win32":  os_name = "windows";break
-	default:       throw new Error(`Unsupported OS: ${os}`)
+	case "linux":  return arch === "arm64" ? "linuxarm64" : "linux64"
+	case "darwin": return arch === "arm64" ? "macosarm64" : "macosx64"
+    case "win32":  return arch === "arm64" ? "windowsarm64" : "windows64"
+    default:       throw new Error(`Unsupported OS: ${os}`)
 	}
-	let arch_suffix = arch === "arm64" ? "arm64" : "64"
-	return os_name + arch_suffix
 }
 
-function current_platform(): string {
+function current_platform(): Platform {
 	return to_platform(process.platform, process.arch)
 }
 
@@ -124,7 +118,7 @@ function parse_version(version: string): {cef: string; chromium: string} | null 
 }
 
 interface Global_Args {
-	platform: string
+	platform: Platform
 	beta:     boolean
 	force:    boolean
 }
@@ -140,7 +134,7 @@ function parse_global_args(args: string[]): Global_Args {
 		},
 	})
 	return {
-		platform: typeof values.platform === "string" ? values.platform : current_platform(),
+		platform: typeof values.platform === "string" && is_platform(values.platform) ? values.platform : current_platform(),
 		beta: Boolean(values.beta),
 		force: Boolean(values.force),
 	}
@@ -188,8 +182,6 @@ function parse_download_args(cmd_args: string[]): Download_Args {
 }
 
 async function build_cef(args: Download_Args, log_prefix: string): Promise<string> {
-	let cef_platform = platform_to_cef(args.platform)
-
 	let cef_version: string
 	let chromium_version: string
 	let channel: string
@@ -218,10 +210,10 @@ async function build_cef(args: Download_Args, log_prefix: string): Promise<strin
 	}
 
 	let full_version = `${cef_version}+chromium-${chromium_version}`
-	let output_dir = path.join(CEF_DIR, cef_platform)
+	let output_dir = path.join(CEF_DIR, args.platform)
 	let build_dir = path.join(output_dir, "build")
 
-	console.log(`[${log_prefix}] Platform: ${args.platform} (${cef_platform})`)
+	console.log(`[${log_prefix}] Platform: ${args.platform} (${args.platform})`)
 	console.log(`[${log_prefix}] Channel: ${channel}`)
 	console.log(`[${log_prefix}] Version: ${full_version}`)
 
@@ -246,7 +238,7 @@ async function build_cef(args: Download_Args, log_prefix: string): Promise<strin
 		}
 
 		let channel_suffix = channel === "stable" ? "" : `_${channel}`
-		let url = `https://cef-builds.spotifycdn.com/cef_binary_${cef_version}+chromium-${chromium_version}_${cef_platform}${channel_suffix}_minimal.tar.bz2`
+		let url = `https://cef-builds.spotifycdn.com/cef_binary_${cef_version}+chromium-${chromium_version}_${args.platform}${channel_suffix}_minimal.tar.bz2`
 		console.log(`[${log_prefix}] Downloading from: ${url}`)
 
 		fs.mkdirSync(output_dir, {recursive: true})
@@ -279,15 +271,27 @@ async function build_cef(args: Download_Args, log_prefix: string): Promise<strin
 
 		fs.mkdirSync(build_dir, {recursive: true})
 
-		let gen = "Unix Makefiles"
-		if (args.platform === "win32") {
-			gen = "Visual Studio 17 2022"
-		} else if (args.platform === "darwin") {
-			gen = "Xcode"
-		}
+        let gen: string
+        switch (args.platform) {
+        case "linux64":
+        case "linuxarm64":
+            gen = "Unix Makefiles"
+            break
+        case "macosx64":
+        case "macosarm64":
+            gen = "Xcode"
+            break
+        case "windows64":
+        case "windowsarm64":
+            gen = "Visual Studio 17 2022"
+            break
+        }
+        console.log(`[${log_prefix}] Using CMake generator: ${gen}`)
 
+        console.log(`[${log_prefix}] Running CMake configure...`)
 		await Bun.$`cmake -G ${gen} -DCMAKE_BUILD_TYPE=Release -B build -S .`.cwd(output_dir)
 
+        console.log(`[${log_prefix}] Running CMake build for libcef_dll_wrapper...`)
 		await Bun.$`cmake --build build --target libcef_dll_wrapper -j ${os.cpus().length} --config Release`.cwd(output_dir)
 
 		console.log(`[${log_prefix}] Build complete`)
@@ -296,7 +300,7 @@ async function build_cef(args: Download_Args, log_prefix: string): Promise<strin
 	if (!args.skip_package) {
 		console.log(`[${log_prefix}] Creating package...`)
 
-		let dist_name = `cef-${full_version}-${cef_platform}`
+		let dist_name = `cef-${full_version}-${args.platform}`
 		let pkg_dir = path.join(DIST_DIR, dist_name, "package")
 		fs.mkdirSync(pkg_dir, {recursive: true})
 
