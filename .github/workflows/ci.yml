@@ -12,7 +12,7 @@ jobs:
       version: ${{ steps.check.outputs.VERSION }}
       should-continue: ${{ steps.check.outputs.SHOULD_CONTINUE }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: oven-sh/setup-bun@v2
 
@@ -31,7 +31,7 @@ jobs:
       x86_64: ${{ matrix.os == 'ubuntu-latest' && 'linux64' || matrix.os == 'macos-latest' && 'macosx64' || 'windows64' }}
       arm64: ${{ matrix.os == 'ubuntu-latest' && 'linuxarm64' || matrix.os == 'macos-latest' && 'macosarm64' || 'windowsarm64' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: oven-sh/setup-bun@v2
 
@@ -42,10 +42,10 @@ jobs:
         run: bun run run.ts download -p ${{ env.arm64 }} -v ${{ needs.check-version.outputs.version }}
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cef-${{ matrix.os }}
-          path: dist/
+          path: dist/*.tar.gz
 
   release:
     needs: [check-version, build]
@@ -53,12 +53,12 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true
