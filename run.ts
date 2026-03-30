@@ -10,16 +10,16 @@ const VERSION_FILE = path.join(import.meta.dir, ".last_version")
 const DIST_DIR     = path.join(import.meta.dir, "dist")
 const CEF_DIR      = path.join(import.meta.dir, "cef")
 
-type Platform = "linux64" | "linuxarm64" | "macosx64" | "macosarm64" | "windows64" | "windowsarm64"
-
-const PLATFORMS: Platform[] = [
+const PLATFORMS = [
 	"linux64",
 	"linuxarm64",
 	"macosx64",
 	"macosarm64",
 	"windows64",
 	"windowsarm64",
-]
+] as const
+
+type Platform = typeof PLATFORMS[number]
 
 interface Cef_Build_Info {
 	version: string
