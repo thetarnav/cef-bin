@@ -184,9 +184,7 @@ function parse_download_args(cmd_args: string[]): Download_Args {
 	}
 }
 
-async function cmd_download(cmd_args: string[]): Promise<void> {
-
-	let args = parse_download_args(cmd_args)
+async function build_cef(args: Download_Args, log_prefix: string): Promise<string> {
 	let cef_platform = platform_to_cef(args.platform)
 
 	let cef_version: string
@@ -205,7 +203,7 @@ async function cmd_download(cmd_args: string[]): Promise<void> {
 		chromium_version = parsed.chromium
 		channel = "stable"
 	} else {
-		console.log("[download] No version specified, fetching latest...")
+		console.log(`[${log_prefix}] No version specified, fetching latest...`)
 		let build_info = await get_latest_version(args)
 		if (!build_info) {
 			throw new Error("No CEF build found")
@@ -220,9 +218,9 @@ async function cmd_download(cmd_args: string[]): Promise<void> {
 	let output_dir = path.join(CEF_DIR, cef_platform)
 	let build_dir = path.join(output_dir, "build")
 
-	console.log(`[download] Platform: ${args.platform} (${cef_platform})`)
-	console.log(`[download] Channel: ${channel}`)
-	console.log(`[download] Version: ${full_version}`)
+	console.log(`[${log_prefix}] Platform: ${args.platform} (${cef_platform})`)
+	console.log(`[${log_prefix}] Channel: ${channel}`)
+	console.log(`[${log_prefix}] Version: ${full_version}`)
 
 	let wrapper_path: string
 	if (args.platform.startsWith("windows")) {
@@ -236,17 +234,17 @@ async function cmd_download(cmd_args: string[]): Promise<void> {
 	let needs_download = args.force || !fs.existsSync(output_dir) || existing_version !== full_version
 
 	if (args.skip_download) {
-		console.log("[download] Skipping download")
+		console.log(`[${log_prefix}] Skipping download`)
 	} else if (!needs_download && fs.existsSync(wrapper_path)) {
-		console.log("[download] Already downloaded and built, skipping")
+		console.log(`[${log_prefix}] Already downloaded and built, skipping`)
 	} else {
 		if (existing_version && existing_version !== full_version) {
-			console.log(`[download] Version mismatch: ${existing_version} != ${full_version}`)
+			console.log(`[${log_prefix}] Version mismatch: ${existing_version} != ${full_version}`)
 		}
 
 		let channel_suffix = channel === "stable" ? "" : `_${channel}`
 		let url = `https://cef-builds.spotifycdn.com/cef_binary_${cef_version}+chromium-${chromium_version}_${cef_platform}${channel_suffix}_minimal.tar.bz2`
-		console.log(`[download] Downloading from: ${url}`)
+		console.log(`[${log_prefix}] Downloading from: ${url}`)
 
 		fs.mkdirSync(output_dir, {recursive: true})
 
@@ -261,7 +259,7 @@ async function cmd_download(cmd_args: string[]): Promise<void> {
 			let data = await res.arrayBuffer()
 			fs.writeFileSync(archive, Buffer.from(data))
 
-			console.log(`[download] Extracting...`)
+			console.log(`[${log_prefix}] Extracting...`)
             let proc = await Bun.$`tar -xjf ${archive} --strip-components=1 -C ${output_dir}`
             if (proc.exitCode !== 0) {
                 throw new Error(`tar exited ${proc.exitCode}`)
@@ -274,7 +272,7 @@ async function cmd_download(cmd_args: string[]): Promise<void> {
 	}
 
 	if (!args.skip_build) {
-		console.log("[download] Building wrapper library...")
+		console.log(`[${log_prefix}] Building wrapper library...`)
 
 		fs.mkdirSync(build_dir, {recursive: true})
 
@@ -295,11 +293,11 @@ async function cmd_download(cmd_args: string[]): Promise<void> {
             throw new Error(`cmake build exited ${run_build.exitCode}`)
         }
 
-		console.log("[download] Build complete")
+		console.log(`[${log_prefix}] Build complete`)
 	}
 
 	if (!args.skip_package) {
-		console.log("[download] Creating package...")
+		console.log(`[${log_prefix}] Creating package...`)
 
 		let dist_name = `cef-${full_version}-${cef_platform}`
 		let pkg_dir = path.join(DIST_DIR, dist_name, "package")
@@ -317,7 +315,7 @@ async function cmd_download(cmd_args: string[]): Promise<void> {
 			fs.cpSync(path.join(output_dir, "Release"), path.join(pkg_dir, "Release"), {recursive: true})
 		}
 
-		for (let f of ["LICENSE.txt", "CREDITS.html"]) {
+		for (let f of ["LICENSE.txt", "CREDITS.html", ".version"]) {
 			let src = path.join(output_dir, f)
 			if (fs.existsSync(src)) fs.cpSync(src, path.join(pkg_dir, f))
 		}
@@ -329,237 +327,50 @@ async function cmd_download(cmd_args: string[]): Promise<void> {
 		}
 
 		let size = fs.statSync(archive_path).size
-		console.log(`[download] Package: ${archive_path} (${(size / 1024 / 1024).toFixed(1)} MB)`)
+		console.log(`[${log_prefix}] Package: ${archive_path} (${(size / 1024 / 1024).toFixed(1)} MB)`)
 	}
+
+	return full_version
 }
 
-interface Workflow_Args extends Global_Args {
-	force: boolean
-	skip_download: boolean
-	skip_build: boolean
-	skip_package: boolean
-}
-
-function parse_workflow_args(cmd_args: string[]): Workflow_Args {
-	let {values} = util.parseArgs({
-		args: cmd_args,
-		options: {
-			"platform":      {type: "string",  short: "p"},
-			"beta":          {type: "boolean", default: false},
-			"force":         {type: "boolean", short: "f"},
-			"skip-download": {type: "boolean"},
-			"skip-build":    {type: "boolean"},
-			"skip-package":  {type: "boolean"},
-		},
-	})
-	return {
-		...parse_global_args(cmd_args),
-		force: Boolean(values.force),
-		skip_download: Boolean(values["skip-download"]),
-		skip_build: Boolean(values["skip-build"]),
-		skip_package: Boolean(values["skip-package"]),
-	}
+async function cmd_download(cmd_args: string[]): Promise<void> {
+	let args = parse_download_args(cmd_args)
+	await build_cef(args, "download")
 }
 
 async function cmd_workflow(cmd_args: string[]): Promise<void> {
+	let args = parse_download_args(cmd_args)
+	let args_with_version: Download_Args
 
-	let args = parse_workflow_args(cmd_args)
-	console.log("[workflow] Starting CEF build workflow")
-
-	let build_info = await get_latest_version(args)
-	if (!build_info) {
-		throw new Error("No CEF build found")
-	}
-
-	let parsed = parse_version(build_info.version)
-	let cef_version = parsed?.cef ?? build_info.version
-	let chromium_version = parsed?.chromium ?? ""
-
-	console.log(`[workflow] Latest: ${build_info.version}`)
-
-	let last_version = read_last_version()
-	console.log(`[workflow] Last built: ${last_version ?? "(none)"}`)
-
-	if (!args.force && last_version === build_info.version) {
-		console.log("[workflow] Version unchanged, skipping")
-		return
-	}
-
-	let target_platforms: Platform[] = args.platform
-		? [args.platform as Platform]
-		: PLATFORMS
-
-	console.log(`[workflow] Building: ${target_platforms.join(", ")}`)
-
-	let results: Array<{platform: Platform; success: boolean; error?: string}> = []
-
-	for (let platform of target_platforms) {
-		try {
-			await build_platform({
-				platform,
-				cef_version,
-				chromium_version,
-				skip_download: args.skip_download,
-				skip_build: args.skip_build,
-				skip_package: args.skip_package,
-			})
-			results.push({platform, success: true})
-		} catch (e) {
-			results.push({platform, success: false, error: String(e)})
-		}
-	}
-
-	let failures = results.filter(r => !r.success)
-	if (failures.length > 0) {
-		console.error(`[workflow] ${failures.length} failed:`)
-		for (let f of failures) {
-			console.error(`  - ${f.platform}: ${f.error}`)
-		}
-		process.exit(1)
-	}
-
-	write_last_version(build_info.version)
-	console.log(`[workflow] Updated version to ${build_info.version}`)
-
-	let full_version = `${cef_version}+chromium-${chromium_version}`
-	let artifacts = PLATFORMS
-		.map((p: Platform) => path.join(DIST_DIR, `cef-${full_version}-${p}`, `cef-${full_version}-${p}.tar.gz`))
-		.filter(fs.existsSync)
-
-	console.log(`[workflow] ${artifacts.length} artifacts:`)
-	for (let a of artifacts) {
-		let size = fs.statSync(a).size
-		console.log(`  - ${path.basename(a)} (${(size / 1024 / 1024).toFixed(1)} MB)`)
-	}
-
-	console.log("[workflow] Done")
-}
-
-interface Build_Args {
-	platform: Platform
-	cef_version: string
-	chromium_version: string
-	skip_download: boolean
-	skip_build: boolean
-	skip_package: boolean
-}
-
-async function build_platform(args: Build_Args): Promise<void> {
-	let {platform, cef_version, chromium_version, skip_download, skip_build, skip_package} = args
-	let cef_platform = platform_to_cef(platform)
-	let full_version = `${cef_version}+chromium-${chromium_version}`
-	let output_dir = path.join(CEF_DIR, cef_platform)
-	let build_dir = path.join(output_dir, "build")
-
-	console.log(`[download] Platform: ${platform} (${cef_platform})`)
-	console.log(`[download] Version: ${full_version}`)
-
-	let wrapper_path: string
-	if (platform.startsWith("windows")) {
-		wrapper_path = path.join(build_dir, "libcef_dll_wrapper", "Release", "libcef_dll_wrapper.lib")
+	if (args.version) {
+		args_with_version = args
 	} else {
-		wrapper_path = path.join(build_dir, "libcef_dll_wrapper", "libcef_dll_wrapper.a")
+		let build_info = await get_latest_version(args)
+		if (!build_info) {
+			throw new Error("No CEF build found")
+		}
+
+		let parsed = parse_version(build_info.version)
+		let cef_version = parsed?.cef ?? build_info.version
+		let chromium_version = parsed?.chromium ?? ""
+		let full_version = `${cef_version}+chromium-${chromium_version}`
+
+		console.log(`[workflow] Latest: ${build_info.version}`)
+
+		let last_version = read_last_version()
+		console.log(`[workflow] Last built: ${last_version ?? "(none)"}`)
+
+		if (!args.force && last_version === build_info.version) {
+			console.log("[workflow] Version unchanged, skipping")
+			return
+		}
+
+		args_with_version = {...args, version: full_version}
 	}
 
-	let version_file = path.join(output_dir, ".version")
-	let existing_version = fs.existsSync(version_file) ? fs.readFileSync(version_file, "utf-8") : null
-	let needs_download = !fs.existsSync(output_dir) || existing_version !== full_version
-
-	if (skip_download) {
-		console.log("[download] Skipping download")
-	} else if (!needs_download && fs.existsSync(wrapper_path)) {
-		console.log("[download] Already downloaded and built, skipping")
-	} else {
-		if (existing_version && existing_version !== full_version) {
-			console.log(`[download] Version mismatch: ${existing_version} != ${full_version}`)
-		}
-
-		let url = `https://cef-builds.spotifycdn.com/cef_binary_${cef_version}+chromium-${chromium_version}_${cef_platform}_minimal.tar.bz2`
-		console.log(`[download] Downloading from: ${url}`)
-
-		fs.mkdirSync(output_dir, {recursive: true})
-
-		let tmp_dir = fs.mkdtempSync(path.join(os.tmpdir(), "cef-"))
-		let archive = path.join(tmp_dir, "cef.tar.bz2")
-
-		try {
-			let res = await fetch(url)
-			if (!res.ok) {
-				throw new Error(`HTTP ${res.status}`)
-			}
-			let data = await res.arrayBuffer()
-			fs.writeFileSync(archive, Buffer.from(data))
-
-			console.log(`[download] Extracting...`)
-			let tar_result = await Bun.$`tar -xjf ${archive} --strip-components=1 -C ${output_dir}`
-			if (tar_result.exitCode !== 0) {
-				throw new Error(`tar exited ${tar_result.exitCode}`)
-			}
-
-			fs.writeFileSync(version_file, full_version)
-		} finally {
-			fs.rmSync(tmp_dir, {force: true, recursive: true})
-		}
-	}
-
-	if (!skip_build) {
-		console.log("[download] Building wrapper library...")
-
-		fs.mkdirSync(build_dir, {recursive: true})
-
-		let gen = platform.startsWith("windows") ? "Visual Studio 17 2022"
-			: platform.startsWith("macos") ? "Xcode"
-			: "Unix Makefiles"
-
-		let $ = Bun.$.cwd(output_dir)
-
-		let cfg = platform.startsWith("windows") ? "Release" : ""
-		let cmake_config = await $`cmake -G ${gen} -DCMAKE_BUILD_TYPE=Release -B build -S .`
-		if (cmake_config.exitCode !== 0) {
-			throw new Error(`cmake configure exited ${cmake_config.exitCode}`)
-		}
-
-		let cmake_build = await $`cmake --build build --target libcef_dll_wrapper -j ${os.cpus().length} ${cfg ? ["--config", cfg] : []}`
-		if (cmake_build.exitCode !== 0) {
-			throw new Error(`cmake build exited ${cmake_build.exitCode}`)
-		}
-
-		console.log("[download] Build complete")
-	}
-
-	if (!skip_package) {
-		console.log("[download] Creating package...")
-
-		let dist_name = `cef-${full_version}-${cef_platform}`
-		let pkg_dir = path.join(DIST_DIR, dist_name, "package")
-		fs.mkdirSync(pkg_dir, {recursive: true})
-
-		let ext = platform.startsWith("windows") ? ".lib" : ".a"
-		if (!fs.existsSync(wrapper_path)) throw new Error(`Wrapper not found: ${wrapper_path}`)
-		fs.cpSync(wrapper_path, path.join(pkg_dir, `libcef_dll_wrapper${ext}`))
-		fs.cpSync(path.join(output_dir, "include"), path.join(pkg_dir, "include"), {recursive: true})
-
-		if (platform.startsWith("macos")) {
-			fs.cpSync(path.join(output_dir, "Chromium Embedded Framework.framework"), path.join(pkg_dir, "Chromium Embedded Framework.framework"), {recursive: true})
-		} else {
-			fs.cpSync(path.join(output_dir, "Resources"), path.join(pkg_dir, "Resources"), {recursive: true})
-			fs.cpSync(path.join(output_dir, "Release"), path.join(pkg_dir, "Release"), {recursive: true})
-		}
-
-		for (let f of ["LICENSE.txt", "CREDITS.html"]) {
-			let src = path.join(output_dir, f)
-			if (fs.existsSync(src)) fs.cpSync(src, path.join(pkg_dir, f))
-		}
-
-		let archive_path = path.join(DIST_DIR, dist_name, `${dist_name}.tar.gz`)
-		let tar_result = await Bun.$`tar -czf ${archive_path} -C ${pkg_dir} .`
-		if (tar_result.exitCode !== 0) {
-			throw new Error(`tar exited ${tar_result.exitCode}`)
-		}
-
-		let size = fs.statSync(archive_path).size
-		console.log(`[download] Package: ${archive_path} (${(size / 1024 / 1024).toFixed(1)} MB)`)
-	}
+	let full_version = await build_cef(args_with_version, "workflow")
+	write_last_version(args_with_version.version!)
+	console.log(`[workflow] Updated version to ${full_version}`)
 }
 
 function print_usage(): void {
@@ -568,7 +379,7 @@ function print_usage(): void {
 	console.log(`Commands:`)
 	console.log(`  latest    Show the latest CEF version`)
 	console.log(`  download  Download, build, and package CEF`)
-	console.log(`  workflow  Build for all platforms`)
+	console.log(`  workflow  Like download, but tracks version in .last_version`)
 	console.log(``)
 	console.log(`Options:`)
 	console.log(`  -p, --platform <name>  Target platform (default: current platform)`)
