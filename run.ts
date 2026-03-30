@@ -279,21 +279,17 @@ async function build_cef(args: Download_Args, log_prefix: string): Promise<strin
 
 		fs.mkdirSync(build_dir, {recursive: true})
 
-		let gen = args.platform === "darwin" ? "Xcode"
-			: "Unix Makefiles"
+		let gen = "Unix Makefiles"
+		if (args.platform === "win32") {
+			gen = "Visual Studio 17 2022"
+		} else if (args.platform === "darwin") {
+			gen = "Xcode"
+		}
 
-        let $ = Bun.$.cwd(output_dir)
+		await Bun.$`cmake -G ${gen} -DCMAKE_BUILD_TYPE=Release -B build -S .`.cwd(output_dir)
 
-        let run_config = await $`cmake -G ${gen} -DCMAKE_BUILD_TYPE=Release -B build -S .`
-        if (run_config.exitCode !== 0) {
-            throw new Error(`cmake configure exited ${run_config.exitCode}`)
-        }
-
-        let cfg = args.platform === "win32" ? "Release" : ""
-        let run_build = await $`cmake --build build --target libcef_dll_wrapper -j ${os.cpus().length} ${cfg ? ["--config", cfg] : []}`
-        if (run_build.exitCode !== 0) {
-            throw new Error(`cmake build exited ${run_build.exitCode}`)
-        }
+		let cfg = args.platform === "win32" ? "Release" : ""
+		await Bun.$`cmake --build build --target libcef_dll_wrapper -j ${os.cpus().length} ${cfg ? ["--config", cfg] : []}`.cwd(output_dir)
 
 		console.log(`[${log_prefix}] Build complete`)
 	}
