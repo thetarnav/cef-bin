@@ -189,8 +189,6 @@ async function cmd_download(cmd_args: string[]): Promise<void> {
 	let args = parse_download_args(cmd_args)
 	let cef_platform = platform_to_cef(args.platform)
 
-    console.log(args, args.platform, cef_platform)
-
 	let cef_version: string
 	let chromium_version: string
 	let channel: string
@@ -264,10 +262,10 @@ async function cmd_download(cmd_args: string[]): Promise<void> {
 			fs.writeFileSync(archive, Buffer.from(data))
 
 			console.log(`[download] Extracting...`)
-			await new Promise<void>((resolve, reject) => {
-				let proc = Bun.spawn(["tar", "-xjf", archive, "--strip-components=1", "-C", output_dir])
-				proc.exited.then(code => code === 0 ? resolve() : reject(new Error(`tar exited ${code}`)))
-			})
+            let proc = await Bun.$`tar -xjf ${archive} --strip-components=1 -C ${output_dir}`
+            if (proc.exitCode !== 0) {
+                throw new Error(`tar exited ${proc.exitCode}`)
+            }
 
 			fs.writeFileSync(version_file, full_version)
 		} finally {
@@ -284,17 +282,18 @@ async function cmd_download(cmd_args: string[]): Promise<void> {
 			: args.platform === "darwin" ? "Xcode"
 			: "Unix Makefiles"
 
-		await new Promise<void>((resolve, reject) => {
-			let proc = Bun.spawn(["cmake", "-G", gen, "-DCMAKE_BUILD_TYPE=Release", "-B", "build", "-S", "."], {cwd: output_dir})
-			proc.exited.then(code => code === 0 ? resolve() : reject(new Error(`cmake configure exited ${code}`)))
-		})
+        let $ = Bun.$.cwd(output_dir)
 
-		await new Promise<void>((resolve, reject) => {
-			let jobs = os.cpus().length
-			let cfg = args.platform === "win32" ? "Release" : ""
-			let proc = Bun.spawn(["cmake", "--build", "build", "--target", "libcef_dll_wrapper", "-j", String(jobs), ...(cfg ? ["--config", cfg] : [])], {cwd: output_dir})
-			proc.exited.then(code => code === 0 ? resolve() : reject(new Error(`cmake build exited ${code}`)))
-		})
+        let run_config = await $`cmake -G ${gen} -DCMAKE_BUILD_TYPE=Release -B build -S .`
+        if (run_config.exitCode !== 0) {
+            throw new Error(`cmake configure exited ${run_config.exitCode}`)
+        }
+
+        let cfg = args.platform === "win32" ? "Release" : ""
+        let run_build = await $`cmake --build build --target libcef_dll_wrapper -j ${os.cpus().length} ${cfg ? ["--config", cfg] : []}`
+        if (run_build.exitCode !== 0) {
+            throw new Error(`cmake build exited ${run_build.exitCode}`)
+        }
 
 		console.log("[download] Build complete")
 	}
@@ -324,10 +323,10 @@ async function cmd_download(cmd_args: string[]): Promise<void> {
 		}
 
 		let archive_path = path.join(DIST_DIR, dist_name, `${dist_name}.tar.gz`)
-		await new Promise<void>((resolve, reject) => {
-			let proc = Bun.spawn(["tar", "-czf", archive_path, "-C", pkg_dir, "."])
-			proc.exited.then(code => code === 0 ? resolve() : reject(new Error(`tar exited ${code}`)))
-		})
+		let tar_result = await Bun.$`tar -czf ${archive_path} -C ${pkg_dir} .`
+		if (tar_result.exitCode !== 0) {
+			throw new Error(`tar exited ${tar_result.exitCode}`)
+		}
 
 		let size = fs.statSync(archive_path).size
 		console.log(`[download] Package: ${archive_path} (${(size / 1024 / 1024).toFixed(1)} MB)`)
@@ -492,10 +491,10 @@ async function build_platform(args: Build_Args): Promise<void> {
 			fs.writeFileSync(archive, Buffer.from(data))
 
 			console.log(`[download] Extracting...`)
-			await new Promise<void>((resolve, reject) => {
-				let proc = Bun.spawn(["tar", "-xjf", archive, "--strip-components=1", "-C", output_dir])
-				proc.exited.then(code => code === 0 ? resolve() : reject(new Error(`tar exited ${code}`)))
-			})
+			let tar_result = await Bun.$`tar -xjf ${archive} --strip-components=1 -C ${output_dir}`
+			if (tar_result.exitCode !== 0) {
+				throw new Error(`tar exited ${tar_result.exitCode}`)
+			}
 
 			fs.writeFileSync(version_file, full_version)
 		} finally {
@@ -512,17 +511,18 @@ async function build_platform(args: Build_Args): Promise<void> {
 			: platform.startsWith("macos") ? "Xcode"
 			: "Unix Makefiles"
 
-		await new Promise<void>((resolve, reject) => {
-			let proc = Bun.spawn(["cmake", "-G", gen, "-DCMAKE_BUILD_TYPE=Release", "-B", "build", "-S", "."], {cwd: output_dir})
-			proc.exited.then(code => code === 0 ? resolve() : reject(new Error(`cmake configure exited ${code}`)))
-		})
+		let $ = Bun.$.cwd(output_dir)
 
-		await new Promise<void>((resolve, reject) => {
-			let jobs = os.cpus().length
-			let cfg = platform.startsWith("windows") ? "Release" : ""
-			let proc = Bun.spawn(["cmake", "--build", "build", "--target", "libcef_dll_wrapper", "-j", String(jobs), ...(cfg ? ["--config", cfg] : [])], {cwd: output_dir})
-			proc.exited.then(code => code === 0 ? resolve() : reject(new Error(`cmake build exited ${code}`)))
-		})
+		let cfg = platform.startsWith("windows") ? "Release" : ""
+		let cmake_config = await $`cmake -G ${gen} -DCMAKE_BUILD_TYPE=Release -B build -S .`
+		if (cmake_config.exitCode !== 0) {
+			throw new Error(`cmake configure exited ${cmake_config.exitCode}`)
+		}
+
+		let cmake_build = await $`cmake --build build --target libcef_dll_wrapper -j ${os.cpus().length} ${cfg ? ["--config", cfg] : []}`
+		if (cmake_build.exitCode !== 0) {
+			throw new Error(`cmake build exited ${cmake_build.exitCode}`)
+		}
 
 		console.log("[download] Build complete")
 	}
@@ -552,10 +552,10 @@ async function build_platform(args: Build_Args): Promise<void> {
 		}
 
 		let archive_path = path.join(DIST_DIR, dist_name, `${dist_name}.tar.gz`)
-		await new Promise<void>((resolve, reject) => {
-			let proc = Bun.spawn(["tar", "-czf", archive_path, "-C", pkg_dir, "."])
-			proc.exited.then(code => code === 0 ? resolve() : reject(new Error(`tar exited ${code}`)))
-		})
+		let tar_result = await Bun.$`tar -czf ${archive_path} -C ${pkg_dir} .`
+		if (tar_result.exitCode !== 0) {
+			throw new Error(`tar exited ${tar_result.exitCode}`)
+		}
 
 		let size = fs.statSync(archive_path).size
 		console.log(`[download] Package: ${archive_path} (${(size / 1024 / 1024).toFixed(1)} MB)`)
