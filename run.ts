@@ -288,8 +288,7 @@ async function build_cef(args: Download_Args, log_prefix: string): Promise<strin
 
 		await Bun.$`cmake -G ${gen} -DCMAKE_BUILD_TYPE=Release -B build -S .`.cwd(output_dir)
 
-		let cfg = args.platform === "win32" ? "Release" : ""
-		await Bun.$`cmake --build build --target libcef_dll_wrapper -j ${os.cpus().length} ${cfg ? ["--config", cfg] : []}`.cwd(output_dir)
+		await Bun.$`cmake --build build --target libcef_dll_wrapper -j ${os.cpus().length} --config Release`.cwd(output_dir)
 
 		console.log(`[${log_prefix}] Build complete`)
 	}
