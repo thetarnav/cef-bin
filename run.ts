@@ -279,8 +279,7 @@ async function build_cef(args: Download_Args, log_prefix: string): Promise<strin
 
 		fs.mkdirSync(build_dir, {recursive: true})
 
-		let gen = args.platform === "win32" ? "Visual Studio 17 2022"
-			: args.platform === "darwin" ? "Xcode"
+		let gen = args.platform === "darwin" ? "Xcode"
 			: "Unix Makefiles"
 
         let $ = Bun.$.cwd(output_dir)
