@@ -308,12 +308,10 @@ async function build_cef(args: Download_Args, log_prefix: string): Promise<strin
 		fs.cpSync(wrapper_path, path.join(pkg_dir, `libcef_dll_wrapper${ext}`))
 		fs.cpSync(path.join(output_dir, "include"), path.join(pkg_dir, "include"), {recursive: true})
 
-		if (args.platform.startsWith("macos")) {
-			fs.cpSync(path.join(output_dir, "Chromium Embedded Framework.framework"), path.join(pkg_dir, "Chromium Embedded Framework.framework"), {recursive: true})
-		} else {
-			fs.cpSync(path.join(output_dir, "Resources"), path.join(pkg_dir, "Resources"), {recursive: true})
-			fs.cpSync(path.join(output_dir, "Release"), path.join(pkg_dir, "Release"), {recursive: true})
+		if (!args.platform.startsWith("macos")) {
+            fs.cpSync(path.join(output_dir, "Resources"), path.join(pkg_dir, "Resources"), {recursive: true})
 		}
+        fs.cpSync(path.join(output_dir, "Release"), path.join(pkg_dir, "Release"), {recursive: true})
 
 		for (let f of ["LICENSE.txt", "CREDITS.html", ".version"]) {
 			let src = path.join(output_dir, f)
