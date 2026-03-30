@@ -41,11 +41,17 @@ jobs:
       - name: Build arm64
         run: bun run run.ts download -p ${{ env.arm64 }} -v ${{ needs.check-version.outputs.version }}
 
-      - name: Upload artifacts
+      - name: Upload artifact x86_64
         uses: actions/upload-artifact@v7
         with:
-          name: cef-${{ matrix.os }}
-          path: dist/**/*.tar.gz
+          name: cef-${{ needs.check-version.outputs.version }}-${{ env.x86_64 }}
+          path: dist/cef-${{ needs.check-version.outputs.version }}-${{ env.x86_64 }}/cef-${{ needs.check-version.outputs.version }}-${{ env.x86_64 }}.tar.gz
+
+      - name: Upload artifact arm64
+        uses: actions/upload-artifact@v7
+        with:
+          name: cef-${{ needs.check-version.outputs.version }}-${{ env.arm64 }}
+          path: dist/cef-${{ needs.check-version.outputs.version }}-${{ env.arm64 }}/cef-${{ needs.check-version.outputs.version }}-${{ env.arm64 }}.tar.gz
 
   release:
     needs: [check-version, build]
