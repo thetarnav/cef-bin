@@ -350,9 +350,15 @@ async function cmd_check(cmd_args: string[]): Promise<void> {
 	let last_version = read_last_version()
 	let should_continue = args.force || last_version !== build_info.version
 
-	console.log(`VERSION=${build_info.version}`)
-	console.log(`LAST_VERSION=${last_version ?? ""}`)
-	console.log(`SHOULD_CONTINUE=${should_continue}`)
+	if (process.env.GITHUB_OUTPUT) {
+		fs.appendFileSync(process.env.GITHUB_OUTPUT, `VERSION=${build_info.version}\n`)
+		fs.appendFileSync(process.env.GITHUB_OUTPUT, `LAST_VERSION=${last_version ?? ""}\n`)
+		fs.appendFileSync(process.env.GITHUB_OUTPUT, `SHOULD_CONTINUE=${should_continue}\n`)
+	} else {
+		console.log(`VERSION=${build_info.version}`)
+		console.log(`LAST_VERSION=${last_version ?? ""}`)
+		console.log(`SHOULD_CONTINUE=${should_continue}`)
+	}
 
 	if (!should_continue) {
 		console.log("Version unchanged, skipping")
