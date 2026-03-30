@@ -35,11 +35,21 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
-      - name: Build x86_64
-        run: bun run run.ts download -p ${{ env.x86_64 }} -v ${{ needs.check-version.outputs.version }}
+      - name: Build
+        if: matrix.os != 'windows-latest'
+        run: |
+          bun run run.ts download -p ${{ env.x86_64 }} -v ${{ needs.check-version.outputs.version }}
+          bun run run.ts download -p ${{ env.arm64 }} -v ${{ needs.check-version.outputs.version }}
 
-      - name: Build arm64
-        run: bun run run.ts download -p ${{ env.arm64 }} -v ${{ needs.check-version.outputs.version }}
+      - name: Build (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: powershell
+        run: |
+          $vcvars = Get-ChildItem -Path "C:\Program Files" -Filter "vcvarsall.bat" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $vcvars) { throw "vcvarsall.bat not found" }
+          & $vcvars.FullName x64
+          bun run run.ts download -p windows64 -v ${{ needs.check-version.outputs.version }}
+          bun run run.ts download -p windowsarm64 -v ${{ needs.check-version.outputs.version }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
