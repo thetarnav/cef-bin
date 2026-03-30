@@ -6,7 +6,7 @@
         "typecheck": "tsc --noEmit",
         "latest": "./run.ts latest",
         "download": "./run.ts download",
-        "workflow": "./run.ts"
+        "workflow": "./run.ts workflow"
     },
     "devDependencies": {
         "typescript": "^5",
