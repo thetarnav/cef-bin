@@ -296,7 +296,7 @@ async function build_cef(args: Download_Args, log_prefix: string): Promise<strin
             break
         case "windows64":
         case "windowsarm64":
-            gen = "Visual Studio 17 2022"
+            gen = "Visual Studio 18 2026"
             break
         }
         console.log(`[${log_prefix}] Using CMake generator: ${gen}`)
